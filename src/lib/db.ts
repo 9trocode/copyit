@@ -49,11 +49,28 @@ if (globalForDb.sqliteDb) {
   db.run('PRAGMA synchronous = NORMAL');
   db.run('PRAGMA temp_store = MEMORY');
 
-  // Safe migration: add secret_hash if not present
-  db.run(`ALTER TABLE snippets ADD COLUMN secret_hash TEXT`, (err) => {
-    if (err && err.message && !err.message.includes('duplicate column')) {
-      console.error('DB migration error:', err.message);
-    }
+  db.serialize(() => {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS snippets (
+        id TEXT PRIMARY KEY,
+        path TEXT UNIQUE NOT NULL,
+        content TEXT NOT NULL,
+        ttl_seconds INTEGER NOT NULL,
+        is_one_time BOOLEAN DEFAULT FALSE,
+        is_consumed BOOLEAN DEFAULT FALSE,
+        secret_hash TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME NOT NULL
+      )
+    `);
+    db.run(`CREATE INDEX IF NOT EXISTS snippets_path_idx ON snippets(path)`);
+    db.run(`CREATE INDEX IF NOT EXISTS snippets_expires_at_idx ON snippets(expires_at)`);
+    // Safe migration for databases created before secret_hash column existed
+    db.run(`ALTER TABLE snippets ADD COLUMN secret_hash TEXT`, (err) => {
+      if (err && err.message && !err.message.includes('duplicate column')) {
+        console.error('DB migration error:', err.message);
+      }
+    });
   });
 
   if (process.env.NODE_ENV !== 'production') {
