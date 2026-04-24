@@ -1,6 +1,23 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
+
+export function hashSecret(secret: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(secret, salt, 32).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+export function verifySecret(secret: string, storedHash: string): boolean {
+  try {
+    const [salt, hash] = storedHash.split(':');
+    const derived = crypto.scryptSync(secret, salt, 32).toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(derived, 'hex'), Buffer.from(hash, 'hex'));
+  } catch {
+    return false;
+  }
+}
 
 const globalForDb = global as unknown as { sqliteDb: sqlite3.Database };
 
@@ -31,6 +48,13 @@ if (globalForDb.sqliteDb) {
   db.run('PRAGMA journal_mode = WAL');
   db.run('PRAGMA synchronous = NORMAL');
   db.run('PRAGMA temp_store = MEMORY');
+
+  // Safe migration: add secret_hash if not present
+  db.run(`ALTER TABLE snippets ADD COLUMN secret_hash TEXT`, (err) => {
+    if (err && err.message && !err.message.includes('duplicate column')) {
+      console.error('DB migration error:', err.message);
+    }
+  });
 
   if (process.env.NODE_ENV !== 'production') {
     globalForDb.sqliteDb = db;

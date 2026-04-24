@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
-import { generatePath } from '@/lib/path-gen';
+import { query, hashSecret } from '@/lib/db';
+import { generatePath, generateShortCode } from '@/lib/path-gen';
 import { v4 as uuidv4 } from 'uuid';
 import { redis } from '@/lib/redis';
 
@@ -23,47 +23,44 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { content, ttl_seconds, one_time } = body;
+    const { content, ttl_seconds, one_time, secret, use_short_code } = body;
 
     if (!content || typeof content !== 'string') {
       return NextResponse.json({ error: 'Missing or invalid content' }, { status: 400 });
     }
 
-    // Rough check for 1MB limit (1 character = 1 byte roughly for ascii, max 2-4 bytes for UTF8)
     if (Buffer.byteLength(content, 'utf8') > 1024 * 1024) {
       return NextResponse.json({ error: 'Content size exceeds 1MB limit' }, { status: 413 });
     }
 
     const ttlSeconds = Math.max(60, Math.min(parseInt(ttl_seconds) || 86400, 604800));
     const isOneTime = Boolean(one_time);
+    const secretHash = secret && typeof secret === 'string' && secret.length > 0
+      ? hashSecret(secret)
+      : null;
 
-    let path = '';
+    let snippetPath = '';
     let inserted = false;
     let attempts = 0;
-
-    // Define outside loop so it's accessible in the return
     let expiresAtIso = '';
 
-    // Retry loop for path collision
     while (!inserted && attempts < 5) {
-      path = generatePath();
+      snippetPath = use_short_code ? generateShortCode() : generatePath();
       const id = uuidv4();
       const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
-
       expiresAtIso = expiresAt.toISOString();
 
       try {
-        // Since sqlite3 driver error codes can be opaque, we do a quick check instead
-        const existing = await query(`SELECT id FROM snippets WHERE path = ?`, [path]) as { rows?: unknown[] };
+        const existing = await query(`SELECT id FROM snippets WHERE path = ?`, [snippetPath]) as { rows?: unknown[] };
         if (existing.rows && existing.rows.length > 0) {
           attempts++;
           continue;
         }
 
         await query(
-          `INSERT INTO snippets (id, path, content, ttl_seconds, is_one_time, expires_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [id, path, content, ttlSeconds, isOneTime ? 1 : 0, expiresAtIso]
+          `INSERT INTO snippets (id, path, content, ttl_seconds, is_one_time, secret_hash, expires_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [id, snippetPath, content, ttlSeconds, isOneTime ? 1 : 0, secretHash, expiresAtIso]
         );
         inserted = true;
       } catch (err: unknown) {
@@ -76,10 +73,12 @@ export async function POST(req: Request) {
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://copyit.pipeops.app';
+    const locked = Boolean(secretHash);
 
     return NextResponse.json({
-      path,
-      url: `${baseUrl}/${path}`,
+      path: snippetPath,
+      url: `${baseUrl}/${snippetPath}`,
+      locked,
       expires_at: expiresAtIso,
       created_at: new Date().toISOString()
     }, { status: 201 });

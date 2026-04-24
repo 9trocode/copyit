@@ -9,8 +9,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Copyit | [ TERMINAL RELAY ]",
-  description: "Raw endpoint for cross-machine snippet transportation.",
+  title: "Copyit — Share secrets, not screenshots.",
+  description: "Paste once. Retrieve from anywhere with curl. Lock with a secret.",
 };
 
 export default function RootLayout({

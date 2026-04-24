@@ -1,3 +1,13 @@
+import crypto from 'crypto';
+
+// Excludes 0/O/1/I to avoid ambiguity when reading/typing codes
+const SHORT_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+export function generateShortCode(): string {
+  const bytes = crypto.randomBytes(4);
+  return Array.from(bytes).map(b => SHORT_CODE_CHARS[b % SHORT_CODE_CHARS.length]).join('');
+}
+
 export const words = [
   "solar", "maple", "drift", "echo", "cinder", "meadow", "frost", "ember",
   "atlas", "harbor", "lumen", "vantage", "quartz", "summit", "anchor", "delta",
@@ -19,7 +29,5 @@ export function generatePath(wordCount = 4): string {
     [source[i], source[j]] = [source[j], source[i]];
   }
 
-  // Randomly add 0 to 2 extra words for more entropy
-  const finalCount = wordCount + Math.floor(Math.random() * 3);
-  return source.slice(0, finalCount).join("-");
+  return source.slice(0, wordCount).join("-");
 }

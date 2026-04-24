@@ -16,7 +16,7 @@ function main() {
 
   const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
-      console.error('❌ Failed to connect to SQLite dump', err);
+      console.error('Failed to connect to SQLite', err);
       process.exit(1);
     }
   });
@@ -24,7 +24,6 @@ function main() {
   db.serialize(() => {
     db.run('PRAGMA journal_mode = WAL');
 
-    console.log('Creating snippets table...');
     db.run(`
       CREATE TABLE IF NOT EXISTS snippets (
         id TEXT PRIMARY KEY,
@@ -33,27 +32,27 @@ function main() {
         ttl_seconds INTEGER NOT NULL,
         is_one_time BOOLEAN DEFAULT FALSE,
         is_consumed BOOLEAN DEFAULT FALSE,
+        secret_hash TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         expires_at DATETIME NOT NULL
       );
     `);
 
-    console.log('Creating index on path...');
-    db.run(`
-      CREATE INDEX IF NOT EXISTS snippets_path_idx ON snippets(path);
-    `);
+    db.run(`ALTER TABLE snippets ADD COLUMN secret_hash TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Migration warning:', err.message);
+      }
+    });
 
-    console.log('Creating index on expires_at...');
-    db.run(`
-      CREATE INDEX IF NOT EXISTS snippets_expires_at_idx ON snippets(expires_at);
-    `);
+    db.run(`CREATE INDEX IF NOT EXISTS snippets_path_idx ON snippets(path);`);
+    db.run(`CREATE INDEX IF NOT EXISTS snippets_expires_at_idx ON snippets(expires_at);`);
   });
 
   db.close((err) => {
     if (err) {
       console.error(err.message);
     } else {
-      console.log('✅ SQLite database initialized successfully.');
+      console.log('SQLite database initialized successfully.');
     }
   });
 }
