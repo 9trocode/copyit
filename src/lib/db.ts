@@ -9,11 +9,13 @@ export function hashSecret(secret: string): string {
   return `${salt}:${hash}`;
 }
 
-export function verifySecret(secret: string, storedHash: string): boolean {
+export async function verifySecret(secret: string, storedHash: string): Promise<boolean> {
   try {
     const [salt, hash] = storedHash.split(':');
-    const derived = crypto.scryptSync(secret, salt, 32).toString('hex');
-    return crypto.timingSafeEqual(Buffer.from(derived, 'hex'), Buffer.from(hash, 'hex'));
+    const derived = await new Promise<Buffer>((resolve, reject) =>
+      crypto.scrypt(secret, salt, 32, (err, key) => err ? reject(err) : resolve(key))
+    );
+    return crypto.timingSafeEqual(derived, Buffer.from(hash, 'hex'));
   } catch {
     return false;
   }
