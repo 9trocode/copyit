@@ -11,7 +11,7 @@
   "dependencies": {
     "@types/uuid": "^10.0.0",
     "@upstash/redis": "^1.36.2",
-    "next": "^15.5.15",
+    "next": "^15.5.18",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "sqlite3": "^6.0.1",
